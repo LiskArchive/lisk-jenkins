@@ -1,0 +1,64 @@
+#!/usr/bin/groovy
+properties([
+  parameters([
+    string(defaultValue: "devnet-development", description: 'Branch / commit:', name: 'branch'),
+    string(defaultValue: "devnet", description: 'Tag (devnet, devnet1, ...)', name: 'tag'),
+    string(defaultValue: "", description: 'Seed node IP', name: 'seedNodeIP'),
+    string(defaultValue: "", description: 'API Whitelisted IP', name: 'whitelistIP')
+   ])
+])
+pipeline{
+    agent {
+        node {
+            label 'lisk-docker'
+            customWorkspace "workspace/${URLDecoder.decode(JOB_NAME)}/${BUILD_NUMBER}"
+        }
+    }
+    stages {
+        stage('Build release'){
+            steps {
+                script {
+                    def buildEnv = dir('docker/lisk-build'){
+                        return docker.build('lisk-build')
+                    }
+                    buildEnv.inside {
+                        dir('lisk'){
+                            git url: 'https://github.com/LiskHQ/lisk', branch: "${params.branch}"
+                            sh """
+                            npm install
+                            jq '.api.access.whiteList = [\"127.0.0.1\",\"${params.whitelistIP}\"]' config.json | sponge config.json
+                            jq '.forging.access.whiteList = [\"127.0.0.1\",\"${params.whitelistIP}\"]' config.json | sponge config.json
+                            jq '.peers.list = [{\"ip\":\"${params.seedNodeIP}\", \"wsPort\":\"5000\"}]' config.json | sponge config.json
+                            node ./node_modules/.bin/grunt release
+                            jq -r '.version' config.json > ".lisk-version"
+                            """
+                        }
+                        env.VERSION = readFile("lisk/.lisk-version").trim()
+                        dir('lisk-build'){
+                            git url: 'https://github.com/LiskHQ/lisk-build', branch: '1.0.0'
+                            sh """
+                            cp ../lisk/release/lisk-${env.VERSION}.tgz src/
+                            bash build.sh -n development -v "${env.VERSION}"
+                            """
+                        }
+                    }
+                }
+            }
+        }
+        stage('Upload tarball'){
+            steps {
+                dir("lisk-build") {
+                    sh """
+                    s3cmd put --acl-public release/lisk-${env.VERSION}-Linux-x86_64.tar.gz  s3:///lisk-releases/lisk-core/${params.tag}/lisk-${env.VERSION}-Linux-x86_64.tar.gz
+                    s3cmd put --acl-public release/lisk-${env.VERSION}-Linux-x86_64.tar.gz.SHA256 s3:///lisk-releases/lisk-core/${params.tag}/lisk-${env.VERSION}-Linux-x86_64.tar.gz.SHA256
+                    """
+                }
+            }
+        }
+        stage('Clean WS') {
+            steps {
+                cleanWs()
+            }
+        }
+    }
+}
