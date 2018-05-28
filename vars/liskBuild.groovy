@@ -5,7 +5,7 @@ def call(Map params) {
 	def buildNetwork = params.network
 	def useTestConfig = params.useTestConfig || false
 
-	def liskDir = "lisk-${liskBranch}-${Math.abs(new Random().nextInt() % 1000) + 1}"
+	def liskDir = "${WORKSPACE}/lisk-${liskBranch}-${Math.abs(new Random().nextInt() % 1000) + 1}"
 	def liskVersion = ""
 	def liskReleaseName = ""
 
@@ -54,7 +54,7 @@ def call(Map params) {
 			liskReleaseName = "lisk-${liskVersion}.tgz"
 			latestVersion = true
 		}
-		liskBuildDir = "lisk-build-${liskBuildBranch}-${Math.abs(new Random().nextInt() % 1000) + 1}"
+		liskBuildDir = "${WORKSPACE}/lisk-build-${liskBuildBranch}-${Math.abs(new Random().nextInt() % 1000) + 1}"
 	}
 	dir(liskBuildDir) {
 		git url: "https://github.com/LiskHQ/lisk-build.git", branch: liskBuildBranch
@@ -64,5 +64,5 @@ def call(Map params) {
 		"""
 	}
 
-	return [version: liskVersion, latestVersion: latestVersion, network: buildNetwork, file: "${liskBuildDir}/release/lisk-Linux-x86_64.tar.gz"]
+	return [version: liskVersion, latestVersion: latestVersion, network: buildNetwork, file: "${liskBuildDir}/release/lisk-${liskVersion}-Linux-x86_64.tar.gz", nonVersionedFile: "${liskBuildDir}/release/lisk-Linux-x86_64.tar.gz"]
 }
