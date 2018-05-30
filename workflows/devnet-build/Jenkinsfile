@@ -3,8 +3,6 @@ properties([
   parameters([
     string(defaultValue: "devnet-development", description: 'Branch / commit:', name: 'branch'),
     string(defaultValue: "devnet", description: 'Tag (devnet, devnet1, ...)', name: 'tag'),
-    string(defaultValue: "", description: 'Seed node IP', name: 'seedNodeIP'),
-    string(defaultValue: "", description: 'API Whitelisted IP', name: 'whitelistIP')
    ])
 ])
 pipeline{
@@ -26,9 +24,6 @@ pipeline{
                             git url: 'https://github.com/LiskHQ/lisk', branch: "${params.branch}"
                             sh """
                             npm install
-                            jq '.api.access.whiteList = [\"127.0.0.1\",\"${params.whitelistIP}\"]' config.json | sponge config.json
-                            jq '.forging.access.whiteList = [\"127.0.0.1\",\"${params.whitelistIP}\"]' config.json | sponge config.json
-                            jq '.peers.list = [{\"ip\":\"${params.seedNodeIP}\", \"wsPort\":\"5000\"}]' config.json | sponge config.json
                             node ./node_modules/.bin/grunt release
                             jq -r '.version' config.json > ".lisk-version"
                             """
