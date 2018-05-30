@@ -3,6 +3,7 @@ properties([
   parameters([
     string(defaultValue: "devnet-development", description: 'Branch / commit:', name: 'branch'),
     string(defaultValue: "devnet", description: 'Tag (devnet, devnet1, ...)', name: 'tag'),
+    booleanParam(defaultValue: false, description: 'Append the commit SHA', name: 'commitsha'),
    ])
 ])
 pipeline{
@@ -21,19 +22,22 @@ pipeline{
                     }
                     buildEnv.inside {
                         dir('lisk'){
-                            git url: 'https://github.com/LiskHQ/lisk', branch: "${params.branch}"
+                            checkout([$class: 'GitSCM', branches: [[name: "${params.branch}" ]],
+                                userRemoteConfigs: [[url: 'https://github.com/LiskHQ/lisk']]])
                             sh """
                             npm install
                             node ./node_modules/.bin/grunt release
                             jq -r '.version' config.json > ".lisk-version"
+                            git rev-parse --short HEAD > .git/commit-id
                             """
                         }
+                        env.COMMIT = readFile("lisk/.git/commit-id").trim()
                         env.VERSION = readFile("lisk/.lisk-version").trim()
                         dir('lisk-build'){
                             git url: 'https://github.com/LiskHQ/lisk-build', branch: '1.0.0'
                             sh """
                             cp ../lisk/release/lisk-${env.VERSION}.tgz src/
-                            bash build.sh -n development -v "${env.VERSION}"
+                            bash build.sh -n dev -v "${env.VERSION}"
                             """
                         }
                     }
@@ -42,11 +46,20 @@ pipeline{
         }
         stage('Upload tarball'){
             steps {
-                dir("lisk-build") {
-                    sh """
-                    s3cmd put --acl-public release/lisk-${env.VERSION}-Linux-x86_64.tar.gz  s3:///lisk-releases/lisk-core/${params.tag}/lisk-${env.VERSION}-Linux-x86_64.tar.gz
-                    s3cmd put --acl-public release/lisk-${env.VERSION}-Linux-x86_64.tar.gz.SHA256 s3:///lisk-releases/lisk-core/${params.tag}/lisk-${env.VERSION}-Linux-x86_64.tar.gz.SHA256
-                    """
+                script {
+                    def outputFile = params.commitsha ? "lisk-${env.VERSION}-${env.COMMIT}-Linux-x86_64.tar.gz" : "lisk-${env.VERSION}-Linux-x86_64.tar.gz"
+                    dir("lisk-build") {
+                        sh """
+                        if [ ! -f release/${outputFile} ]; then
+                            cd release
+                            mv lisk-${env.VERSION}-Linux-x86_64.tar.gz ${outputFile}
+                            sha256sum ${outputFile} > ${outputFile}.SHA256
+                            cd ..
+                        fi
+                        s3cmd put --acl-public release/${outputFile}  s3:///lisk-releases/lisk-core/${params.tag}/${outputFile}
+                        s3cmd put --acl-public release/${outputFile}.SHA256 s3:///lisk-releases/lisk-core/${params.tag}/${outputFile}.SHA256
+                        """
+                    }
                 }
             }
         }
