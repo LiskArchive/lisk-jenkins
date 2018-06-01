@@ -1,9 +1,42 @@
 #!/usr/bin/groovy
+
+def check_cache(file) {
+    try {
+        sh """
+        cache_dir="\$HOME/cache/${URLDecoder.decode(JOB_NAME)}"
+        mkdir -p \$cache_dir
+        cache_file=\"\$cache_dir/\$( sha1sum ${file} |awk '{ print \$1 }' ).tar.gz\"
+        if [ -f "\$cache_file" ]; then
+            tar xf "\$cache_file"
+        fi
+        """
+    } catch (err) {
+        echo "Error: ${err}"
+    }
+    return env.cache_file
+}
+
+def save_cache(cache_file, directory, clean_old = 0) {
+    try {
+        sh """
+        if [ ! -f "${cache_file}" ]; then
+            GZIP=-4 tar czf "${cache_file}" ${directory}
+        fi
+        """
+        if (clean_old > 0){
+            sh "find $HOME/cache/${URLDecoder.decode(JOB_NAME)} -name '*.tar.gz' -ctime +${clean_old} -delete"
+        }
+    } catch (err) {
+        echo "Error: ${err}"
+    }
+}
+
 properties([
   parameters([
-    string(defaultValue: "devnet-development", description: 'Branch / commit:', name: 'branch'),
-    string(defaultValue: "devnet", description: 'Tag (devnet, devnet1, ...)', name: 'tag'),
-    booleanParam(defaultValue: false, description: 'Append the commit SHA', name: 'commitsha'),
+    string(defaultValue: "devnet-development", description: 'Branch / commit:', name: 'BRANCH'),
+    string(defaultValue: "devnet", description: 'Tag (devnet, devnet1, ...)', name: 'TAG'),
+    booleanParam(defaultValue: false, description: 'Append the commit SHA', name: 'COMMITSHA'),
+    booleanParam(defaultValue: true, description: 'Use cache (faster)', name: 'USE_CACHE'),
    ])
 ])
 pipeline{
@@ -17,19 +50,26 @@ pipeline{
         stage('Build release'){
             steps {
                 script {
+                    def cache_file = ''
                     def buildEnv = dir('docker/lisk-build'){
                         return docker.build('lisk-build')
                     }
                     buildEnv.inside {
                         dir('lisk'){
-                            checkout([$class: 'GitSCM', branches: [[name: "${params.branch}" ]],
+                            checkout([$class: 'GitSCM', branches: [[name: "${params.BRANCH}" ]],
                                 userRemoteConfigs: [[url: 'https://github.com/LiskHQ/lisk']]])
+                            if ( params.USE_CACHE ) {
+                                cache_file = check_cache("config.json")
+                            }
                             sh """
                             npm install
                             node ./node_modules/.bin/grunt release
                             jq -r '.version' config.json > ".lisk-version"
                             git rev-parse --short HEAD > .git/commit-id
                             """
+                            if ( params.USE_CACHE ) {
+                                save_cache(cache_file, './node_modules', 7)
+                            }
                         }
                         env.COMMIT = readFile("lisk/.git/commit-id").trim()
                         env.VERSION = readFile("lisk/.lisk-version").trim()
@@ -47,7 +87,7 @@ pipeline{
         stage('Upload tarball'){
             steps {
                 script {
-                    def outputFile = params.commitsha ? "lisk-${env.VERSION}-${env.COMMIT}-Linux-x86_64.tar.gz" : "lisk-${env.VERSION}-Linux-x86_64.tar.gz"
+                    def outputFile = params.COMMITSHA ? "lisk-${env.VERSION}-${env.COMMIT}-Linux-x86_64.tar.gz" : "lisk-${env.VERSION}-Linux-x86_64.tar.gz"
                     dir("lisk-build") {
                         sh """
                         if [ ! -f release/${outputFile} ]; then
@@ -56,8 +96,8 @@ pipeline{
                             sha256sum ${outputFile} > ${outputFile}.SHA256
                             cd ..
                         fi
-                        s3cmd put --acl-public release/${outputFile}  s3:///lisk-releases/lisk-core/${params.tag}/${outputFile}
-                        s3cmd put --acl-public release/${outputFile}.SHA256 s3:///lisk-releases/lisk-core/${params.tag}/${outputFile}.SHA256
+                        s3cmd put --acl-public release/${outputFile}  s3:///lisk-releases/lisk-core/${params.TAG}/${outputFile}
+                        s3cmd put --acl-public release/${outputFile}.SHA256 s3:///lisk-releases/lisk-core/${params.TAG}/${outputFile}.SHA256
                         """
                     }
                 }
