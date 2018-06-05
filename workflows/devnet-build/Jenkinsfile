@@ -72,7 +72,9 @@ pipeline{
                         sh """
                         if [ ! -f release/${outputFile} ]; then
                             cd release
-                            mv lisk-${env.VERSION}-Linux-x86_64.tar.gz ${outputFile}
+                            tar xzf lisk-${env.VERSION}-Linux-x86_64.tar.gz
+                            mv lisk-${env.VERSION}-Linux-x86_64 lisk-${env.VERSION}-${env.COMMIT}-Linux-x86_64
+                            tar czf ${outputFile} lisk-${env.VERSION}-${env.COMMIT}-Linux-x86_64
                             sha256sum ${outputFile} > ${outputFile}.SHA256
                             cd ..
                         fi
