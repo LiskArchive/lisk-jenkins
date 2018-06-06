@@ -1,6 +1,7 @@
 #!/usr/bin/groovy
 
 def call(String cache_file, String directory, Integer clean_old = 0, String exclude="") {
+    def jobName = env.JOB_NAME.split('/')[0]
     try {
         if (exclude.length() > 0) {
             sh """
@@ -23,7 +24,7 @@ def call(String cache_file, String directory, Integer clean_old = 0, String excl
             """            
         }
         if (clean_old > 0){
-            sh "find $HOME/cache/${URLDecoder.decode(JOB_NAME)} -name '*.tar.gz' -ctime +${clean_old} -delete"
+            sh "find $HOME/cache/${jobName} -name '*.tar.gz' -ctime +${clean_old} -delete"
         }
     } catch (err) {
         echo "Error: ${err}"

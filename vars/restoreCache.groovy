@@ -1,9 +1,10 @@
 #!/usr/bin/groovy
 
 def call(String file) {
+    def jobName = env.JOB_NAME.split('/')[0]
     try {
         sh """
-        cache_dir="\$HOME/cache/${URLDecoder.decode(JOB_NAME)}"
+        cache_dir="\$HOME/cache/${jobName}"
         mkdir -p \$cache_dir
         cache_file=\"\$cache_dir/\$( sha1sum ${file} |awk '{ print \$1 }' ).tar.gz\"
         if [ -f "\$cache_file" ]; then
