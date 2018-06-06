@@ -18,7 +18,7 @@ pipeline{
     stages {
         stage('Load library') {
             steps {
-                library 'lisk-jenkins@per_job_cache'
+                library 'lisk-jenkins'
             }
         }
         stage('Build release') {
