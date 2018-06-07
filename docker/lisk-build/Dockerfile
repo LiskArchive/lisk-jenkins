@@ -3,7 +3,7 @@ FROM ubuntu:trusty
 RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get --assume-yes install --no-install-recommends \
         curl sudo unzip wget zip jq moreutils python \
-        autoconf automake build-essential git libpq-dev libtool libncurses5-dev libreadline6-dev \
+        autoconf automake build-essential git libpq-dev libtool libncurses5-dev \
         chrpath zlib1g-dev libssl-dev ca-certificates && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
