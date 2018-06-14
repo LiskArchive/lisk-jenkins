@@ -46,7 +46,7 @@ def call(Map params) {
 		liskVersion = readFile("${liskDir}/.lisk-version").trim()
 
 		if(fileExists("${liskDir}/genesisBlock.json")) {
-			liskBuildBranch = "0.9.15"
+			liskBuildBranch = "development"
 			liskReleaseName = "${liskVersion}.tar.gz"
 			latestVersion = false
 		} else {
