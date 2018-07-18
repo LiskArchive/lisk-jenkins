@@ -38,7 +38,7 @@ pipeline{
                             sh """
                             npm install
                             node ./node_modules/.bin/grunt release
-                            jq -r '.version' config.json > ".lisk-version"
+                            jq -r '.version' package.json > ".lisk-version"
                             git rev-parse --short HEAD > .git/commit-id
                             """
                             if ( params.USE_CACHE ) {
