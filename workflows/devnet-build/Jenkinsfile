@@ -33,7 +33,7 @@ pipeline{
                             checkout([$class: 'GitSCM', branches: [[name: "${params.BRANCH}" ]],
                                 userRemoteConfigs: [[url: 'https://github.com/LiskHQ/lisk']]])
                             if ( params.USE_CACHE ) {
-                                cache_file = restoreCache("config.json")
+                                cache_file = restoreCache("package.json")
                             }
                             sh """
                             npm install
@@ -48,7 +48,7 @@ pipeline{
                         env.COMMIT = readFile("lisk/.git/commit-id").trim()
                         env.VERSION = readFile("lisk/.lisk-version").trim()
                         dir('lisk-build'){
-                            git url: 'https://github.com/LiskHQ/lisk-build', branch: '1.0.0'
+                            git url: 'https://github.com/LiskHQ/lisk-build', branch: '1.1.0'
                             if ( params.USE_CACHE ) {
                                 cache_file = restoreCache("config.sh")
                             }
