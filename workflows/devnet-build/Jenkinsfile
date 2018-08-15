@@ -3,7 +3,6 @@
 properties([
   parameters([
     string(defaultValue: "devnet-development", description: 'Branch / commit:', name: 'BRANCH'),
-    string(defaultValue: "devnet", description: 'Tag (devnet, devnet1, ...)', name: 'TAG'),
     booleanParam(defaultValue: false, description: 'Append the commit SHA', name: 'COMMITSHA'),
     booleanParam(defaultValue: true, description: 'Use cache (faster)', name: 'USE_CACHE'),
    ])
@@ -78,8 +77,8 @@ pipeline{
                             sha256sum ${outputFile} > ${outputFile}.SHA256
                             cd ..
                         fi
-                        s3cmd put --acl-public release/${outputFile} s3:///lisk-releases/lisk-core/${params.TAG}/${outputFile}
-                        s3cmd put --acl-public release/${outputFile}.SHA256 s3:///lisk-releases/lisk-core/${params.TAG}/${outputFile}.SHA256
+                        s3cmd put --acl-public release/${outputFile} s3:///lisk-releases/lisk-core/${outputFile}
+                        s3cmd put --acl-public release/${outputFile}.SHA256 s3:///lisk-releases/lisk-core/${outputFile}.SHA256
                         """
                     }
                 }
