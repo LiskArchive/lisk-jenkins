@@ -3,6 +3,8 @@
 properties([
   parameters([
     string(defaultValue: "devnet-development", description: 'Branch / commit:', name: 'BRANCH'),
+    string(defaultValue: "devnet", description: 'Tag (devnet, devnet1, ...)', name: 'TAG'),
+    string(defaultValue: "dev", description: 'Network (dev, alpha, beta, test, main)', name: 'NETWORK'),
     booleanParam(defaultValue: false, description: 'Append the commit SHA', name: 'COMMITSHA'),
     booleanParam(defaultValue: true, description: 'Use cache (faster)', name: 'USE_CACHE'),
    ])
@@ -23,6 +25,11 @@ pipeline{
         stage('Build release') {
             steps {
                 script {
+                    def network_options = ["dev", "alpha", "beta", "test", "main"];
+                    if(!network_options.contains(params.NETWORK)) {
+                        currentBuild.result = 'ABORTED'
+                        error('Invalid network option, aborting...')
+                    }
                     def cache_file = ''
                     def buildEnv = dir('docker/lisk-build'){
                         return docker.build('lisk-build')
@@ -53,7 +60,7 @@ pipeline{
                             }
                             sh """
                             cp ../lisk/release/lisk-${env.VERSION}.tgz src/
-                            bash build.sh -n dev -v "${env.VERSION}"
+                            bash build.sh -n "${params.NETWORK}" -v "${env.VERSION}"
                             """
                             if ( params.USE_CACHE ) {
                                 saveCache(cache_file, './src', 14, 'lisk-*')
@@ -77,8 +84,8 @@ pipeline{
                             sha256sum ${outputFile} > ${outputFile}.SHA256
                             cd ..
                         fi
-                        s3cmd put --acl-public release/${outputFile} s3:///lisk-releases/lisk-core/${outputFile}
-                        s3cmd put --acl-public release/${outputFile}.SHA256 s3:///lisk-releases/lisk-core/${outputFile}.SHA256
+                        s3cmd put --acl-public release/${outputFile} s3:///lisk-releases/lisk-core/${params.TAG}/${outputFile}
+                        s3cmd put --acl-public release/${outputFile}.SHA256 s3:///lisk-releases/lisk-core/${params.TAG}/${outputFile}.SHA256
                         """
                     }
                 }
