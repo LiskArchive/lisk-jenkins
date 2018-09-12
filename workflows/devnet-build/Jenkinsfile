@@ -77,8 +77,8 @@ pipeline{
                             sha256sum ${outputFile} > ${outputFile}.SHA256
                             cd ..
                         fi
-                        s3cmd put --acl-public release/${outputFile} s3:///lisk-releases/lisk-core/${outputFile}
-                        s3cmd put --acl-public release/${outputFile}.SHA256 s3:///lisk-releases/lisk-core/${outputFile}.SHA256
+                        s3cmd put --acl-public release/${outputFile} s3://lisk-releases/lisk-core/${outputFile}
+                        s3cmd put --acl-public release/${outputFile}.SHA256 s3://lisk-releases/lisk-core/${outputFile}.SHA256
                         """
                     }
                 }
