@@ -2,7 +2,7 @@
 
 properties([
   parameters([
-    string(defaultValue: "devnet-development", description: 'Branch / commit:', name: 'BRANCH'),
+    string(defaultValue: "devnet-development", description: 'Commit-ish:', name: 'COMMITISH'),
     booleanParam(defaultValue: false, description: 'Append the commit SHA', name: 'COMMITSHA'),
     booleanParam(defaultValue: true, description: 'Use cache (faster)', name: 'USE_CACHE'),
    ])
