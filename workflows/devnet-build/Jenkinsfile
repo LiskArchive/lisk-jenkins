@@ -29,7 +29,7 @@ pipeline{
                     }
                     buildEnv.inside("-v $HOME/cache:$HOME/cache") {
                         dir('lisk'){
-                            checkout([$class: 'GitSCM', branches: [[name: "${params.BRANCH}" ]],
+                            checkout([$class: 'GitSCM', branches: [[name: "${params.COMMITISH}" ]],
                                 userRemoteConfigs: [[url: 'https://github.com/LiskHQ/lisk']]])
                             if ( params.USE_CACHE ) {
                                 cache_file = restoreCache("package.json")
