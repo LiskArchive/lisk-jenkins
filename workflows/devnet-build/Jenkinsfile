@@ -7,6 +7,7 @@ properties([
     booleanParam(defaultValue: true, description: 'Use cache (faster)', name: 'USE_CACHE'),
    ])
 ])
+
 pipeline{
     agent {
         node {
@@ -27,24 +28,28 @@ pipeline{
                     def buildEnv = dir('docker/lisk-build'){
                         return docker.build('lisk-build')
                     }
-                    buildEnv.inside("-v $HOME/cache:$HOME/cache") {
-                        dir('lisk'){
-                            checkout([$class: 'GitSCM', branches: [[name: "${params.COMMITISH}" ]],
-                                userRemoteConfigs: [[url: 'https://github.com/LiskHQ/lisk']]])
-                            if ( params.USE_CACHE ) {
-                                cache_file = restoreCache("package.json")
-                            }
+                    dir('lisk'){
+                        checkout([$class: 'GitSCM', branches: [[name: "${params.COMMITISH}" ]],
+                            userRemoteConfigs: [[url: 'https://github.com/LiskHQ/lisk']]])
+                        if ( params.USE_CACHE ) {
+                            cache_file = restoreCache("package.json")
+                        }
+                        nvm(readFile(".nvmrc").trim()) {
                             sh """
                             npm install
                             node ./node_modules/.bin/grunt release
-                            jq -r '.version' package.json > ".lisk-version"
-                            git rev-parse --short HEAD > .git/commit-id
+                            jq -r '.version' package.json > .lisk-version
+                            git rev-parse --short HEAD > .commit-id
                             """
-                            if ( params.USE_CACHE ) {
-                                saveCache(cache_file, './node_modules', 7)
-                            }
                         }
-                        env.COMMIT = readFile("lisk/.git/commit-id").trim()
+                        if ( params.USE_CACHE ) {
+                            saveCache(cache_file, './node_modules', 7)
+                        }
+                        stash includes: 'release/lisk-*.tgz, .lisk-version, .commit-id', name: 'tarball'
+                    }
+                    buildEnv.inside("-v $HOME/cache:$HOME/cache") {
+                        unstash 'tarball'
+                        env.COMMIT = readFile("lisk/.commit-id").trim()
                         env.VERSION = readFile("lisk/.lisk-version").trim()
                         dir('lisk-build'){
                             git url: 'https://github.com/LiskHQ/lisk-build', branch: '1.1.4'
