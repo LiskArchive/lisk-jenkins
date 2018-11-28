@@ -1,14 +1,14 @@
-#!/usr/bin/groovy
+@Library('lisk-jenkins') _
 
 properties([
   parameters([
     string(defaultValue: "development", description: 'Commit-ish:', name: 'COMMITISH'),
-    booleanParam(defaultValue: false, description: 'Append the commit SHA', name: 'COMMITSHA'),
-    booleanParam(defaultValue: true, description: 'Use cache (faster)', name: 'USE_CACHE'),
+    booleanParam(defaultValue: true, description: 'Append the commit SHA', name: 'COMMITSHA'),
+    booleanParam(defaultValue: true, description: 'Use cache', name: 'USE_CACHE'),
    ])
 ])
 
-pipeline{
+pipeline {
     agent {
         node {
             label 'lisk-docker'
@@ -16,81 +16,58 @@ pipeline{
         }
     }
     stages {
-        stage('Load library') {
-            steps {
-                library 'lisk-jenkins'
-            }
-        }
         stage('Build release') {
             steps {
                 script {
-                    def cache_file = ''
                     def buildEnv = dir('docker/lisk-build'){
                         return docker.build('lisk-build')
                     }
-                    dir('lisk'){
-                        checkout([$class: 'GitSCM', branches: [[name: "${params.COMMITISH}" ]],
-                            userRemoteConfigs: [[url: 'https://github.com/LiskHQ/lisk']]])
-                        if ( params.USE_CACHE ) {
-                            cache_file = restoreCache("package.json")
-                        }
-                        nvm(readFile(".nvmrc").trim()) {
-                            sh """
-                            npm install
-                            node ./node_modules/.bin/grunt release
-                            jq -r '.version' package.json > .lisk-version
-                            git rev-parse --short HEAD > .commit-id
-                            """
-                        }
-                        if ( params.USE_CACHE ) {
-                            saveCache(cache_file, './node_modules', 7)
-                        }
-                        stash includes: 'release/lisk-*.tgz, .lisk-version, .commit-id', name: 'tarball'
-                    }
                     buildEnv.inside("-v $HOME/cache:$HOME/cache") {
-                        unstash 'tarball'
-                        env.COMMIT = readFile("lisk/.commit-id").trim()
-                        env.VERSION = readFile("lisk/.lisk-version").trim()
-                        dir('lisk-build'){
-                            git url: 'https://github.com/LiskHQ/lisk-build', branch: '1.3.1'
-                            if ( params.USE_CACHE ) {
-                                cache_file = restoreCache("config.sh")
+                        checkout([$class: 'GitSCM',
+                                  branches: [[name: "${params.COMMITISH}" ]],
+                                  userRemoteConfigs: [[url: 'https://github.com/LiskHQ/lisk']]])
+                        if ( params.USE_CACHE ) {
+                            cache_file = restoreCache("build/config.sh")
+                        }
+                        dir('build') {
+                            ansiColor('xterm') {
+                                sh 'make LISK_NETWORK=devnet'
                             }
-                            sh """
-                            cp ../lisk/release/lisk-${env.VERSION}.tgz src/
-                            bash build.sh -n dev -v "${env.VERSION}"
-                            """
-                            if ( params.USE_CACHE ) {
-                                saveCache(cache_file, './src', 14, 'lisk-*')
-                            }
+                         }
+                        if ( params.USE_CACHE ) {
+                            saveCache(cache_file, 'build/src', 14, 'lisk-[0-9]*')
                         }
                     }
                 }
             }
         }
-        stage('Upload tarball'){
+        stage('Upload tarball') {
             steps {
-                script {
-                    def outputFile = params.COMMITSHA ? "lisk-${env.VERSION}-${env.COMMIT}-Linux-x86_64.tar.gz" : "lisk-${env.VERSION}-Linux-x86_64.tar.gz"
-                    dir("lisk-build") {
-                        sh """
-                        if [ ! -f release/${outputFile} ]; then
-                            cd release
-                            tar xzf lisk-${env.VERSION}-Linux-x86_64.tar.gz
-                            mv lisk-${env.VERSION}-Linux-x86_64 lisk-${env.VERSION}-${env.COMMIT}-Linux-x86_64
-                            tar czf ${outputFile} lisk-${env.VERSION}-${env.COMMIT}-Linux-x86_64
-                            sha256sum ${outputFile} > ${outputFile}.SHA256
-                            cd ..
-                        fi
-                        s3cmd put --acl-public release/${outputFile} s3://lisk-releases/lisk-core/${outputFile}
-                        s3cmd put --acl-public release/${outputFile}.SHA256 s3://lisk-releases/lisk-core/${outputFile}.SHA256
-                        """
-                    }
+                dir('build/release') {
+                sh '''
+                    VERSION=$( jq --raw-output '.version' ../../package.json )
+                    OUTPUT_FILE="lisk-$VERSION-Linux-x86_64.tar.gz"
+                    if [ "x$COMMITSHA" = "xtrue" ]; then
+                        OUTPUT_FILE="lisk-$VERSION-$GIT_COMMIT-Linux-x86_64.tar.gz"
+                    fi
+
+                    if [ ! -f "$OUTPUT_FILE" ]; then
+                        tar xf "lisk-$VERSION-Linux-x86_64.tar.gz"
+                        mv "lisk-$VERSION-Linux-x86_64" "lisk-$VERSION-$GIT_COMMIT-Linux-x86_64"
+                        tar czf "$OUTPUT_FILE" "lisk-$VERSION-$GIT_COMMIT-Linux-x86_64"
+                        sha256sum "$OUTPUT_FILE" >"$OUTPUT_FILE.SHA256"
+                    fi
+
+                    s3cmd put --acl-public "$OUTPUT_FILE" "s3://lisk-releases/lisk-core/$OUTPUT_FILE"
+                    s3cmd put --acl-public "$OUTPUT_FILE.SHA256" "s3://lisk-releases/lisk-core/$OUTPUT_FILE.SHA256"
+                    '''
                 }
             }
         }
-        stage('Clean WS') {
-            steps {
+    }
+    post {
+        success {
+            script {
                 cleanWs()
             }
         }

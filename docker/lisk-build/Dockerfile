@@ -1,8 +1,8 @@
-FROM ubuntu:trusty
+FROM ubuntu:xenial
 
 RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get --assume-yes install --no-install-recommends \
-      wget ca-certificates \
+      wget ca-certificates jq \
       automake git python \
       build-essential autoconf libtool zlib1g-dev \
       tcl8.5 moreutils && \
