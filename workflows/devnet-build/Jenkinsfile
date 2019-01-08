@@ -49,6 +49,9 @@ pipeline {
                     OUTPUT_FILE="lisk-$VERSION-Linux-x86_64.tar.gz"
                     if [ "x$COMMITSHA" = "xtrue" ]; then
                         OUTPUT_FILE="lisk-$VERSION-$GIT_COMMIT-Linux-x86_64.tar.gz"
+		        echo "$VERSION-$GIT_COMMIT" >.lisk_version
+		    else
+		        echo "$VERSION" >.lisk_version
                     fi
 
                     if [ ! -f "$OUTPUT_FILE" ]; then
@@ -61,6 +64,9 @@ pipeline {
                     s3cmd put --acl-public "$OUTPUT_FILE" "s3://lisk-releases/lisk-core/$OUTPUT_FILE"
                     s3cmd put --acl-public "$OUTPUT_FILE.SHA256" "s3://lisk-releases/lisk-core/$OUTPUT_FILE.SHA256"
                     '''
+		    script {
+		      env.LISK_VERSION = readFile('.lisk_version').trim()
+		    }
                 }
             }
         }
@@ -73,3 +79,4 @@ pipeline {
         }
     }
 }
+// vim: filetype=groovy
