@@ -46,18 +46,19 @@ pipeline {
                 dir('build/release') {
                 sh '''
                     VERSION=$( jq --raw-output '.version' ../../package.json )
+		    SHORT_HASH=$( git rev-parse --short HEAD )
                     OUTPUT_FILE="lisk-$VERSION-Linux-x86_64.tar.gz"
                     if [ "x$COMMITSHA" = "xtrue" ]; then
-                        OUTPUT_FILE="lisk-$VERSION-$GIT_COMMIT-Linux-x86_64.tar.gz"
-		        echo "$VERSION-$GIT_COMMIT" >.lisk_version
+                        OUTPUT_FILE="lisk-$VERSION-$SHORT_HASH-Linux-x86_64.tar.gz"
+		        echo "$VERSION-$SHORT_HASH" >.lisk_version
 		    else
 		        echo "$VERSION" >.lisk_version
                     fi
 
                     if [ ! -f "$OUTPUT_FILE" ]; then
                         tar xf "lisk-$VERSION-Linux-x86_64.tar.gz"
-                        mv "lisk-$VERSION-Linux-x86_64" "lisk-$VERSION-$GIT_COMMIT-Linux-x86_64"
-                        tar czf "$OUTPUT_FILE" "lisk-$VERSION-$GIT_COMMIT-Linux-x86_64"
+                        mv "lisk-$VERSION-Linux-x86_64" "lisk-$VERSION-$SHORT_HASH-Linux-x86_64"
+                        tar czf "$OUTPUT_FILE" "lisk-$VERSION-$SHORT_HASH-Linux-x86_64"
                         sha256sum "$OUTPUT_FILE" >"$OUTPUT_FILE.SHA256"
                     fi
 
