@@ -8,6 +8,8 @@ properties([
    ])
 ])
 
+def skipBuild = false
+
 pipeline {
     agent {
         node {
@@ -22,10 +24,30 @@ pipeline {
                     def buildEnv = dir('docker/lisk-build'){
                         return docker.build('lisk-build')
                     }
+                    checkout([$class: 'GitSCM',
+                              branches: [[name: "${params.COMMITISH}" ]],
+                              userRemoteConfigs: [[url: 'https://github.com/LiskHQ/lisk']]])
+                    try {
+                        dir('build') {
+                            sh('''
+                                if [ "x$COMMITSHA" = "xtrue" ]; then
+                                   VERSION=$( jq --raw-output '.version' ../package.json )
+                                   SHORT_HASH=$( git rev-parse --short HEAD )
+                                   OUTPUT_FILE="lisk-$VERSION-$SHORT_HASH-Linux-x86_64.tar.gz"
+                                   if s3cmd -q info "s3://lisk-releases/lisk-core/$OUTPUT_FILE" 2> /dev/null ; then
+                                    echo "$VERSION-$SHORT_HASH" > release/.lisk_version
+                                    exit 1
+                                   fi
+                                fi
+                                ''')
+                        }
+                    }
+                    catch (exc) {
+                        skipBuild = true
+                        echo "Build exists - doing nothing."
+                        return
+                    }
                     buildEnv.inside("-v $HOME/cache:$HOME/cache") {
-                        checkout([$class: 'GitSCM',
-                                  branches: [[name: "${params.COMMITISH}" ]],
-                                  userRemoteConfigs: [[url: 'https://github.com/LiskHQ/lisk']]])
                         if ( params.USE_CACHE ) {
                             cache_file = restoreCache("build/config.sh")
                         }
@@ -43,31 +65,36 @@ pipeline {
         }
         stage('Upload tarball') {
             steps {
-                dir('build/release') {
-                sh '''
-                    VERSION=$( jq --raw-output '.version' ../../package.json )
-		    SHORT_HASH=$( git rev-parse --short HEAD )
-                    OUTPUT_FILE="lisk-$VERSION-Linux-x86_64.tar.gz"
-                    if [ "x$COMMITSHA" = "xtrue" ]; then
-                        OUTPUT_FILE="lisk-$VERSION-$SHORT_HASH-Linux-x86_64.tar.gz"
-		        echo "$VERSION-$SHORT_HASH" >.lisk_version
-		    else
-		        echo "$VERSION" >.lisk_version
-                    fi
+                script {
+                    dir('build/release') {
+                        if ( skipBuild ) {
+                            echo "Build has been aborted."
+                            echo "Nothing to upload"
+                        } else {
+                            sh '''
+                                VERSION=$( jq --raw-output '.version' ../../package.json )
+                                SHORT_HASH=$( git rev-parse --short HEAD )
+                                OUTPUT_FILE="lisk-$VERSION-Linux-x86_64.tar.gz"
+                                if [ "x$COMMITSHA" = "xtrue" ]; then
+                                    OUTPUT_FILE="lisk-$VERSION-$SHORT_HASH-Linux-x86_64.tar.gz"
+                                    echo "$VERSION-$SHORT_HASH" >.lisk_version
+                                else
+                                    echo "$VERSION" >.lisk_version
+                                fi
 
-                    if [ ! -f "$OUTPUT_FILE" ]; then
-                        tar xf "lisk-$VERSION-Linux-x86_64.tar.gz"
-                        mv "lisk-$VERSION-Linux-x86_64" "lisk-$VERSION-$SHORT_HASH-Linux-x86_64"
-                        tar czf "$OUTPUT_FILE" "lisk-$VERSION-$SHORT_HASH-Linux-x86_64"
-                        sha256sum "$OUTPUT_FILE" >"$OUTPUT_FILE.SHA256"
-                    fi
+                                if [ ! -f "$OUTPUT_FILE" ]; then
+                                    tar xf "lisk-$VERSION-Linux-x86_64.tar.gz"
+                                    mv "lisk-$VERSION-Linux-x86_64" "lisk-$VERSION-$SHORT_HASH-Linux-x86_64"
+                                    tar czf "$OUTPUT_FILE" "lisk-$VERSION-$SHORT_HASH-Linux-x86_64"
+                                    sha256sum "$OUTPUT_FILE" >"$OUTPUT_FILE.SHA256"
+                                fi
 
-                    s3cmd put --acl-public "$OUTPUT_FILE" "s3://lisk-releases/lisk-core/$OUTPUT_FILE"
-                    s3cmd put --acl-public "$OUTPUT_FILE.SHA256" "s3://lisk-releases/lisk-core/$OUTPUT_FILE.SHA256"
-                    '''
-		    script {
-		      env.LISK_VERSION = readFile('.lisk_version').trim()
-		    }
+                                s3cmd put --acl-public "$OUTPUT_FILE" "s3://lisk-releases/lisk-core/$OUTPUT_FILE"
+                                s3cmd put --acl-public "$OUTPUT_FILE.SHA256" "s3://lisk-releases/lisk-core/$OUTPUT_FILE.SHA256"
+                                '''
+                        }
+                        env.LISK_VERSION = readFile('.lisk_version').trim()
+                    }
                 }
             }
         }
